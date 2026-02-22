@@ -26,27 +26,46 @@ document.body.appendChild(renderer.domElement);
 const light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(5,10,5);
 scene.add(light);
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-const ambient = new THREE.AmbientLight(0xffffff, 0.5);
-scene.add(ambient);
+// ================== ПЛАТФОРМЫ ==================
 
-// Платформа
-const ground = new THREE.Mesh(
-  new THREE.BoxGeometry(50,1,50),
-  new THREE.MeshStandardMaterial({ color: 0x808080 })
-);
-ground.position.y = -0.5;
-scene.add(ground);
+const platforms = [];
 
-// Игрок
+function createPlatform(x,y,z,w,h,d,color=0x808080){
+  const platform = new THREE.Mesh(
+    new THREE.BoxGeometry(w,h,d),
+    new THREE.MeshStandardMaterial({color})
+  );
+  platform.position.set(x,y,z);
+  scene.add(platform);
+  platforms.push(platform);
+}
+
+// Старт
+createPlatform(0,0,0,10,1,10);
+
+// Дорожка obby
+createPlatform(0,3,-10,4,1,4,0xffaa00);
+createPlatform(5,6,-20,4,1,4,0xffaa00);
+createPlatform(-5,9,-30,4,1,4,0xffaa00);
+createPlatform(0,12,-40,4,1,4,0x00ff00);
+
+// ================== ИГРОК ==================
+
 const player = new THREE.Mesh(
-  new THREE.BoxGeometry(1,1,1),
-  new THREE.MeshStandardMaterial({ color: 0xff0000 })
+  new THREE.BoxGeometry(1,2,1),
+  new THREE.MeshStandardMaterial({color:0xff0000})
 );
-player.position.y = 1;
+player.position.set(0,2,0);
 scene.add(player);
 
-camera.position.set(0,5,10);
+let velocityY = 0;
+let isOnGround = false;
+const gravity = -0.01;
+const jumpPower = 0.25;
+
+// ================== УПРАВЛЕНИЕ ==================
 
 const keys = {};
 document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
@@ -61,11 +80,9 @@ document.addEventListener("contextmenu", e => e.preventDefault());
 document.addEventListener("mousedown", e => {
   if(e.button === 2) isRightMouseDown = true;
 });
-
 document.addEventListener("mouseup", e => {
   if(e.button === 2) isRightMouseDown = false;
 });
-
 document.addEventListener("mousemove", e => {
   if(isRightMouseDown){
     yaw -= e.movementX * 0.002;
@@ -74,80 +91,121 @@ document.addEventListener("mousemove", e => {
   }
 });
 
-// Другие игроки
+// ================== МУЛЬТИПЛЕЕР ==================
+
 const otherPlayers = {};
 
-function addOtherPlayer(id, data){
+function addOtherPlayer(id,data){
   const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(1,1,1),
-    new THREE.MeshStandardMaterial({ color: 0x00ff00 })
+    new THREE.BoxGeometry(1,2,1),
+    new THREE.MeshStandardMaterial({color:0x00ff00})
   );
-  mesh.position.set(data.x, data.y, data.z);
+  mesh.position.set(data.x,data.y,data.z);
   scene.add(mesh);
-  otherPlayers[id] = mesh;
+  otherPlayers[id]=mesh;
 }
 
-socket.on("currentPlayers", players => {
+socket.on("currentPlayers", players=>{
   for(let id in players){
-    if(id !== socket.id){
-      addOtherPlayer(id, players[id]);
-    }
+    if(id!==socket.id) addOtherPlayer(id,players[id]);
   }
 });
-
-socket.on("newPlayer", data => {
-  addOtherPlayer(data.id, data.player);
-});
-
-socket.on("playerMoved", data => {
+socket.on("newPlayer", data=>addOtherPlayer(data.id,data.player));
+socket.on("playerMoved", data=>{
   if(otherPlayers[data.id]){
-    otherPlayers[data.id].position.set(data.player.x, data.player.y, data.player.z);
+    otherPlayers[data.id].position.set(data.player.x,data.player.y,data.player.z);
   }
 });
-
-socket.on("playerDisconnected", id => {
+socket.on("playerDisconnected", id=>{
   if(otherPlayers[id]){
     scene.remove(otherPlayers[id]);
     delete otherPlayers[id];
   }
 });
 
+// ================== ФИЗИКА ==================
+
+function checkCollision(){
+  isOnGround = false;
+
+  for(let platform of platforms){
+    const px = platform.position.x;
+    const py = platform.position.y + 0.5;
+    const pz = platform.position.z;
+
+    const dx = Math.abs(player.position.x - px);
+    const dz = Math.abs(player.position.z - pz);
+
+    if(dx < platform.geometry.parameters.width/2 &&
+       dz < platform.geometry.parameters.depth/2){
+
+      const top = py + 0.5;
+
+      if(player.position.y - 1 <= top &&
+         player.position.y - 1 >= top - 0.5){
+
+        player.position.y = top + 1;
+        velocityY = 0;
+        isOnGround = true;
+      }
+    }
+  }
+}
+
+// ================== АНИМАЦИЯ ==================
+
 function animate(){
   requestAnimationFrame(animate);
 
-  const speed = 0.1;
+  const speed = 0.15;
 
   if(keys["w"]){
-    player.position.x -= Math.sin(yaw) * speed;
-    player.position.z -= Math.cos(yaw) * speed;
+    player.position.x -= Math.sin(yaw)*speed;
+    player.position.z -= Math.cos(yaw)*speed;
   }
   if(keys["s"]){
-    player.position.x += Math.sin(yaw) * speed;
-    player.position.z += Math.cos(yaw) * speed;
+    player.position.x += Math.sin(yaw)*speed;
+    player.position.z += Math.cos(yaw)*speed;
   }
   if(keys["a"]){
-    player.position.x -= Math.cos(yaw) * speed;
-    player.position.z += Math.sin(yaw) * speed;
+    player.position.x -= Math.cos(yaw)*speed;
+    player.position.z += Math.sin(yaw)*speed;
   }
   if(keys["d"]){
-    player.position.x += Math.cos(yaw) * speed;
-    player.position.z -= Math.sin(yaw) * speed;
+    player.position.x += Math.cos(yaw)*speed;
+    player.position.z -= Math.sin(yaw)*speed;
   }
 
-  const distance = 10;
-  camera.position.x = player.position.x + Math.sin(yaw) * distance * Math.cos(pitch);
-  camera.position.z = player.position.z + Math.cos(yaw) * distance * Math.cos(pitch);
-  camera.position.y = player.position.y + Math.sin(pitch) * distance + 3;
+  // Прыжок
+  if(keys[" "] && isOnGround){
+    velocityY = jumpPower;
+  }
 
+  velocityY += gravity;
+  player.position.y += velocityY;
+
+  checkCollision();
+
+  // Смерть при падении
+  if(player.position.y < -20){
+    player.position.set(0,2,0);
+    velocityY = 0;
+  }
+
+  // Камера
+  const dist = 10;
+  camera.position.x = player.position.x + Math.sin(yaw)*dist*Math.cos(pitch);
+  camera.position.z = player.position.z + Math.cos(yaw)*dist*Math.cos(pitch);
+  camera.position.y = player.position.y + Math.sin(pitch)*dist + 3;
   camera.lookAt(player.position);
 
-  socket.emit("updatePosition", {
-    x: player.position.x,
-    y: player.position.y,
-    z: player.position.z
+  socket.emit("updatePosition",{
+    x:player.position.x,
+    y:player.position.y,
+    z:player.position.z
   });
 
-  renderer.render(scene, camera);
+  renderer.render(scene,camera);
 }
 
 animate();
