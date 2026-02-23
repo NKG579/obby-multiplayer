@@ -6,35 +6,58 @@
     body { margin:0; overflow:hidden; font-family:Arial; }
     canvas { display:block; }
 
-    #chatBox {
+    /* Кнопка чата */
+    #chatToggle {
       position: fixed;
-      bottom: 50px;
-      left: 10px;
-      width: 300px;
-      max-height: 200px;
-      overflow-y: auto;
-      background: rgba(0,0,0,0.5);
+      bottom: 20px;
+      left: 20px;
+      width: 50px;
+      height: 50px;
+      background: rgba(0,0,0,0.6);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       color: white;
+      font-size: 24px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    #chatContainer {
+      position: fixed;
+      bottom: 80px;
+      left: 20px;
+      width: 300px;
+      background: rgba(0,0,0,0.6);
       padding: 10px;
-      font-size: 14px;
+      border-radius: 10px;
       display: none;
+      color: white;
+    }
+
+    #chatBox {
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: 14px;
+      margin-bottom: 5px;
     }
 
     #chatInput {
-      position: fixed;
-      bottom: 10px;
-      left: 10px;
-      width: 300px;
+      width: 100%;
       padding: 5px;
       box-sizing: border-box;
-      display: none;
     }
   </style>
 </head>
 <body>
 
-<div id="chatBox"></div>
-<input id="chatInput" placeholder="Написать сообщение...">
+<div id="chatToggle">💬</div>
+
+<div id="chatContainer">
+  <div id="chatBox"></div>
+  <input id="chatInput" placeholder="Написать сообщение...">
+</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
@@ -42,7 +65,7 @@
 <script>
 const socket = io();
 
-// ================== THREE SETUP ==================
+// ================== THREE ==================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 
@@ -51,16 +74,16 @@ const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const light = new THREE.DirectionalLight(0xffffff, 1);
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
+const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(5,10,5);
 scene.add(light);
 
 // ================== ПЛАТФОРМЫ ==================
-const platforms = [];
+const platforms=[];
 
 function createPlatform(x,y,z,w,h,d,color=0x808080){
-  const mesh = new THREE.Mesh(
+  const mesh=new THREE.Mesh(
     new THREE.BoxGeometry(w,h,d),
     new THREE.MeshStandardMaterial({color})
   );
@@ -76,63 +99,115 @@ createPlatform(-5,9,-30,4,1,4,0xffaa00);
 createPlatform(0,12,-40,4,1,4,0x00ff00);
 
 // ================== ИГРОК ==================
-const player = new THREE.Mesh(
+const player=new THREE.Mesh(
   new THREE.BoxGeometry(1,2,1),
   new THREE.MeshStandardMaterial({color:0xff0000})
 );
 player.position.set(0,2,0);
 scene.add(player);
 
-let velocityY = 0;
-let isOnGround = false;
-const gravity = -0.01;
-const jumpPower = 0.25;
+let velocityY=0;
+let isOnGround=false;
+const gravity=-0.01;
+const jumpPower=0.25;
 
-const keys = {};
-let isTyping = false;
-
-document.addEventListener("keydown", e => {
-
-  // Открытие чата по T
-  if(e.key.toLowerCase() === "t" && !isTyping){
-    openChat();
-    return;
-  }
-
-  // Закрытие по ESC
-  if(e.key === "Escape" && isTyping){
-    closeChat();
-    return;
-  }
-
-  keys[e.key.toLowerCase()] = true;
-});
-
-document.addEventListener("keyup", e => {
-  keys[e.key.toLowerCase()] = false;
-});
+const keys={};
+let isTyping=false;
 
 // ================== КАМЕРА ==================
-let yaw = 0;
-let pitch = 0;
-let isRightMouseDown = false;
+let yaw=0;
+let pitch=0;
+let isRightMouseDown=false;
 
-document.addEventListener("contextmenu", e => e.preventDefault());
-document.addEventListener("mousedown", e => { if(e.button===2) isRightMouseDown=true; });
-document.addEventListener("mouseup", e => { if(e.button===2) isRightMouseDown=false; });
-document.addEventListener("mousemove", e=>{
+document.addEventListener("contextmenu",e=>e.preventDefault());
+document.addEventListener("mousedown",e=>{ if(e.button===2) isRightMouseDown=true; });
+document.addEventListener("mouseup",e=>{ if(e.button===2) isRightMouseDown=false; });
+document.addEventListener("mousemove",e=>{
   if(isRightMouseDown && !isTyping){
-    yaw -= e.movementX*0.002;
-    pitch -= e.movementY*0.002;
-    pitch = Math.max(-1.5, Math.min(1.5, pitch));
+    yaw-=e.movementX*0.002;
+    pitch-=e.movementY*0.002;
+    pitch=Math.max(-1.5,Math.min(1.5,pitch));
   }
+});
+
+// ================== УПРАВЛЕНИЕ ==================
+document.addEventListener("keydown",e=>{
+  keys[e.key.toLowerCase()]=true;
+});
+document.addEventListener("keyup",e=>{
+  keys[e.key.toLowerCase()]=false;
+});
+
+// ================== ЧАТ UI ==================
+const chatToggle=document.getElementById("chatToggle");
+const chatContainer=document.getElementById("chatContainer");
+const chatBox=document.getElementById("chatBox");
+const chatInput=document.getElementById("chatInput");
+
+let chatTimeout=null;
+
+function openChat(){
+  chatContainer.style.display="block";
+  isTyping=true;
+  chatInput.focus();
+  resetChatTimer();
+}
+
+function closeChat(){
+  chatContainer.style.display="none";
+  isTyping=false;
+  chatInput.blur();
+}
+
+function resetChatTimer(){
+  if(chatTimeout) clearTimeout(chatTimeout);
+  chatTimeout=setTimeout(()=>{
+    if(document.activeElement!==chatInput){
+      closeChat();
+    }
+  },4000);
+}
+
+chatToggle.addEventListener("click",()=>{
+  if(chatContainer.style.display==="block"){
+    closeChat();
+  } else {
+    openChat();
+  }
+});
+
+chatInput.addEventListener("keydown",e=>{
+  resetChatTimer();
+
+  if(e.key==="Enter" && chatInput.value.trim()!==""){
+    socket.emit("chatMessage",chatInput.value);
+    chatInput.value="";
+    resetChatTimer();
+  }
+});
+
+chatInput.addEventListener("blur",()=>{
+  isTyping=false;
+  resetChatTimer();
+});
+
+// При получении сообщения чат автоматически открывается
+socket.on("chatMessage",data=>{
+  openChat();
+
+  const msg=document.createElement("div");
+  msg.textContent=data.id.slice(0,4)+": "+data.message;
+  chatBox.appendChild(msg);
+  chatBox.scrollTop=chatBox.scrollHeight;
+
+  resetChatTimer();
 });
 
 // ================== МУЛЬТИПЛЕЕР ==================
-const otherPlayers = {};
+const otherPlayers={};
 
 function addOtherPlayer(id,data){
-  const mesh = new THREE.Mesh(
+  const mesh=new THREE.Mesh(
     new THREE.BoxGeometry(1,2,1),
     new THREE.MeshStandardMaterial({color:0x00ff00})
   );
@@ -141,56 +216,22 @@ function addOtherPlayer(id,data){
   otherPlayers[id]=mesh;
 }
 
-socket.on("currentPlayers", players=>{
+socket.on("currentPlayers",players=>{
   for(let id in players){
     if(id!==socket.id) addOtherPlayer(id,players[id]);
   }
 });
-socket.on("newPlayer", data=>addOtherPlayer(data.id,data.player));
-socket.on("playerMoved", data=>{
+socket.on("newPlayer",data=>addOtherPlayer(data.id,data.player));
+socket.on("playerMoved",data=>{
   if(otherPlayers[data.id]){
     otherPlayers[data.id].position.set(data.player.x,data.player.y,data.player.z);
   }
 });
-socket.on("playerDisconnected", id=>{
+socket.on("playerDisconnected",id=>{
   if(otherPlayers[id]){
     scene.remove(otherPlayers[id]);
     delete otherPlayers[id];
   }
-});
-
-// ================== ЧАТ ==================
-const chatBox = document.getElementById("chatBox");
-const chatInput = document.getElementById("chatInput");
-
-function openChat(){
-  isTyping = true;
-  chatBox.style.display = "block";
-  chatInput.style.display = "block";
-  chatInput.focus();
-}
-
-function closeChat(){
-  isTyping = false;
-  chatInput.value = "";
-  chatInput.blur();
-  chatBox.style.display = "none";
-  chatInput.style.display = "none";
-}
-
-chatInput.addEventListener("keydown", (e)=>{
-  if(e.key==="Enter" && chatInput.value.trim()!==""){
-    socket.emit("chatMessage", chatInput.value);
-    chatInput.value="";
-    closeChat();
-  }
-});
-
-socket.on("chatMessage", data=>{
-  const msg=document.createElement("div");
-  msg.textContent=data.id.slice(0,4)+": "+data.message;
-  chatBox.appendChild(msg);
-  chatBox.scrollTop=chatBox.scrollHeight;
 });
 
 // ================== ФИЗИКА ==================
