@@ -6,7 +6,6 @@
 body { margin:0; overflow:hidden; font-family:Arial; }
 canvas { display:block; }
 
-/* Экран ника */
 #nicknameScreen {
   position: fixed;
   width: 100%;
@@ -25,7 +24,6 @@ canvas { display:block; }
   font-size:18px;
 }
 
-/* Чат */
 #chatToggle {
   position: fixed;
   bottom: 20px;
@@ -131,7 +129,7 @@ const player=new THREE.Mesh(
 player.position.set(0,2,0);
 scene.add(player);
 
-/* ===== КАМЕРА 3 ЛИЦА С ПКМ ===== */
+/* ===== КАМЕРА ===== */
 
 let yaw=0;
 let pitch=0;
@@ -155,20 +153,36 @@ document.addEventListener("mousemove",e=>{
   }
 });
 
-/* ===== НИКИ ДРУГИХ ИГРОКОВ ===== */
+/* ===== УПРАВЛЕНИЕ ОТНОСИТЕЛЬНО КАМЕРЫ ===== */
 
-function createNicknameLabel(text){
-  const canvas=document.createElement("canvas");
-  const ctx=canvas.getContext("2d");
-  canvas.width=256; canvas.height=64;
-  ctx.fillStyle="white";
-  ctx.font="30px Arial";
-  ctx.fillText(text,10,40);
-  const texture=new THREE.CanvasTexture(canvas);
-  const material=new THREE.SpriteMaterial({map:texture});
-  const sprite=new THREE.Sprite(material);
-  sprite.scale.set(4,1,1);
-  return sprite;
+const keys={};
+
+document.addEventListener("keydown",e=>keys[e.code]=true);
+document.addEventListener("keyup",e=>keys[e.code]=false);
+
+/* ===== ФИЗИКА ===== */
+
+let velocityY=0;
+let onGround=false;
+const gravity=-0.01;
+const jumpPower=0.25;
+
+function checkCollision(){
+  onGround=false;
+  for(let p of platforms){
+    const dx=Math.abs(player.position.x-p.position.x);
+    const dz=Math.abs(player.position.z-p.position.z);
+    if(dx<p.geometry.parameters.width/2 &&
+       dz<p.geometry.parameters.depth/2){
+      const top=p.position.y+0.5;
+      if(player.position.y-1<=top &&
+         player.position.y-1>=top-0.5){
+        player.position.y=top+1;
+        velocityY=0;
+        onGround=true;
+      }
+    }
+  }
 }
 
 /* ===== МУЛЬТИПЛЕЕР ===== */
@@ -204,6 +218,20 @@ socket.on("playerDisconnected",(id)=>{
   }
 });
 
+function createNicknameLabel(text){
+  const canvas=document.createElement("canvas");
+  const ctx=canvas.getContext("2d");
+  canvas.width=256; canvas.height=64;
+  ctx.fillStyle="white";
+  ctx.font="30px Arial";
+  ctx.fillText(text,10,40);
+  const texture=new THREE.CanvasTexture(canvas);
+  const material=new THREE.SpriteMaterial({map:texture});
+  const sprite=new THREE.Sprite(material);
+  sprite.scale.set(4,1,1);
+  return sprite;
+}
+
 function addOther(id,data){
   const mesh=new THREE.Mesh(
     new THREE.BoxGeometry(1,2,1),
@@ -219,7 +247,7 @@ function addOther(id,data){
   others[id]={mesh};
 }
 
-/* ===== ЧАТ + ЗВУК ===== */
+/* ===== ЧАТ ===== */
 
 const chatBox=document.getElementById("chatBox");
 const chatInput=document.getElementById("chatInput");
@@ -246,47 +274,42 @@ socket.on("chatMessage",(data)=>{
   audio.play();
 });
 
-/* ===== ФИЗИКА ===== */
-
-let velocityY=0;
-let onGround=false;
-const gravity=-0.01;
-const jumpPower=0.25;
-
-const keys={};
-
-document.addEventListener("keydown",e=>keys[e.code]=true);
-document.addEventListener("keyup",e=>keys[e.code]=false);
-
-function checkCollision(){
-  onGround=false;
-  for(let p of platforms){
-    const dx=Math.abs(player.position.x-p.position.x);
-    const dz=Math.abs(player.position.z-p.position.z);
-    if(dx<p.geometry.parameters.width/2 &&
-       dz<p.geometry.parameters.depth/2){
-      const top=p.position.y+0.5;
-      if(player.position.y-1<=top &&
-         player.position.y-1>=top-0.5){
-        player.position.y=top+1;
-        velocityY=0;
-        onGround=true;
-      }
-    }
-  }
-}
+/* ===== АНИМАЦИЯ ===== */
 
 function animate(){
   requestAnimationFrame(animate);
 
   const speed=0.15;
 
-  if(keys["KeyW"]) player.position.z-=speed;
-  if(keys["KeyS"]) player.position.z+=speed;
-  if(keys["KeyA"]) player.position.x-=speed;
-  if(keys["KeyD"]) player.position.x+=speed;
+  // направление камеры
+  const forwardX = -Math.sin(yaw);
+  const forwardZ = -Math.cos(yaw);
+  const rightX = Math.cos(yaw);
+  const rightZ = -Math.sin(yaw);
 
-  if(keys["Space"] && onGround) velocityY=jumpPower;
+  if(keys["KeyW"]){
+    player.position.x += forwardX * speed;
+    player.position.z += forwardZ * speed;
+  }
+
+  if(keys["KeyS"]){
+    player.position.x -= forwardX * speed;
+    player.position.z -= forwardZ * speed;
+  }
+
+  if(keys["KeyA"]){
+    player.position.x -= rightX * speed;
+    player.position.z -= rightZ * speed;
+  }
+
+  if(keys["KeyD"]){
+    player.position.x += rightX * speed;
+    player.position.z += rightZ * speed;
+  }
+
+  if(keys["Space"] && onGround){
+    velocityY=jumpPower;
+  }
 
   velocityY+=gravity;
   player.position.y+=velocityY;
