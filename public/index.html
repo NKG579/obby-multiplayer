@@ -131,6 +131,32 @@ const player=new THREE.Mesh(
 player.position.set(0,2,0);
 scene.add(player);
 
+/* ===== КАМЕРА 3 ЛИЦА С ПКМ ===== */
+
+let yaw=0;
+let pitch=0;
+let isRightMouseDown=false;
+
+document.addEventListener("contextmenu",e=>e.preventDefault());
+
+document.addEventListener("mousedown",e=>{
+  if(e.button===2) isRightMouseDown=true;
+});
+
+document.addEventListener("mouseup",e=>{
+  if(e.button===2) isRightMouseDown=false;
+});
+
+document.addEventListener("mousemove",e=>{
+  if(isRightMouseDown){
+    yaw-=e.movementX*0.002;
+    pitch-=e.movementY*0.002;
+    pitch=Math.max(-1.5,Math.min(1.5,pitch));
+  }
+});
+
+/* ===== НИКИ ДРУГИХ ИГРОКОВ ===== */
+
 function createNicknameLabel(text){
   const canvas=document.createElement("canvas");
   const ctx=canvas.getContext("2d");
@@ -145,11 +171,7 @@ function createNicknameLabel(text){
   return sprite;
 }
 
-const myLabel=createNicknameLabel("You");
-myLabel.position.y=2;
-player.add(myLabel);
-
-/* Мультиплеер */
+/* ===== МУЛЬТИПЛЕЕР ===== */
 
 const others={};
 
@@ -197,7 +219,7 @@ function addOther(id,data){
   others[id]={mesh};
 }
 
-/* ЧАТ + ЗВУК */
+/* ===== ЧАТ + ЗВУК ===== */
 
 const chatBox=document.getElementById("chatBox");
 const chatInput=document.getElementById("chatInput");
@@ -224,7 +246,7 @@ socket.on("chatMessage",(data)=>{
   audio.play();
 });
 
-/* ФИЗИКА */
+/* ===== ФИЗИКА ===== */
 
 let velocityY=0;
 let onGround=false;
@@ -276,11 +298,12 @@ function animate(){
     velocityY=0;
   }
 
-  camera.position.set(
-    player.position.x,
-    player.position.y+6,
-    player.position.z+10
-  );
+  const distance=10;
+
+  camera.position.x=player.position.x+Math.sin(yaw)*distance*Math.cos(pitch);
+  camera.position.z=player.position.z+Math.cos(yaw)*distance*Math.cos(pitch);
+  camera.position.y=player.position.y+Math.sin(pitch)*distance+3;
+
   camera.lookAt(player.position);
 
   socket.emit("updatePosition",{
