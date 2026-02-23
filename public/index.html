@@ -6,7 +6,6 @@
     body { margin:0; overflow:hidden; font-family:Arial; }
     canvas { display:block; }
 
-    /* Кнопка чата */
     #chatToggle {
       position: fixed;
       bottom: 20px;
@@ -14,12 +13,12 @@
       width: 50px;
       height: 50px;
       background: rgba(0,0,0,0.6);
-      border-radius: 10px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
       color: white;
-      font-size: 24px;
+      font-size: 22px;
       cursor: pointer;
       user-select: none;
     }
@@ -31,7 +30,7 @@
       width: 300px;
       background: rgba(0,0,0,0.6);
       padding: 10px;
-      border-radius: 10px;
+      border-radius: 12px;
       display: none;
       color: white;
     }
@@ -65,7 +64,7 @@
 <script>
 const socket = io();
 
-// ================== THREE ==================
+// ================= THREE =================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 
@@ -79,7 +78,7 @@ const light = new THREE.DirectionalLight(0xffffff,1);
 light.position.set(5,10,5);
 scene.add(light);
 
-// ================== ПЛАТФОРМЫ ==================
+// ================= ПЛАТФОРМЫ =================
 const platforms=[];
 
 function createPlatform(x,y,z,w,h,d,color=0x808080){
@@ -98,7 +97,7 @@ createPlatform(5,6,-20,4,1,4,0xffaa00);
 createPlatform(-5,9,-30,4,1,4,0xffaa00);
 createPlatform(0,12,-40,4,1,4,0x00ff00);
 
-// ================== ИГРОК ==================
+// ================= ИГРОК =================
 const player=new THREE.Mesh(
   new THREE.BoxGeometry(1,2,1),
   new THREE.MeshStandardMaterial({color:0xff0000})
@@ -111,17 +110,30 @@ let isOnGround=false;
 const gravity=-0.01;
 const jumpPower=0.25;
 
+// ================= УПРАВЛЕНИЕ (НЕЗАВИСИМО ОТ ЯЗЫКА) =================
 const keys={};
 let isTyping=false;
 
-// ================== КАМЕРА ==================
+document.addEventListener("keydown",e=>{
+  keys[e.code]=true;
+});
+
+document.addEventListener("keyup",e=>{
+  keys[e.code]=false;
+});
+
+// ================= КАМЕРА =================
 let yaw=0;
 let pitch=0;
 let isRightMouseDown=false;
 
 document.addEventListener("contextmenu",e=>e.preventDefault());
-document.addEventListener("mousedown",e=>{ if(e.button===2) isRightMouseDown=true; });
-document.addEventListener("mouseup",e=>{ if(e.button===2) isRightMouseDown=false; });
+document.addEventListener("mousedown",e=>{
+  if(e.button===2) isRightMouseDown=true;
+});
+document.addEventListener("mouseup",e=>{
+  if(e.button===2) isRightMouseDown=false;
+});
 document.addEventListener("mousemove",e=>{
   if(isRightMouseDown && !isTyping){
     yaw-=e.movementX*0.002;
@@ -130,15 +142,7 @@ document.addEventListener("mousemove",e=>{
   }
 });
 
-// ================== УПРАВЛЕНИЕ ==================
-document.addEventListener("keydown",e=>{
-  keys[e.key.toLowerCase()]=true;
-});
-document.addEventListener("keyup",e=>{
-  keys[e.key.toLowerCase()]=false;
-});
-
-// ================== ЧАТ UI ==================
+// ================= ЧАТ =================
 const chatToggle=document.getElementById("chatToggle");
 const chatContainer=document.getElementById("chatContainer");
 const chatBox=document.getElementById("chatBox");
@@ -150,7 +154,7 @@ function openChat(){
   chatContainer.style.display="block";
   isTyping=true;
   chatInput.focus();
-  resetChatTimer();
+  resetTimer();
 }
 
 function closeChat(){
@@ -159,7 +163,7 @@ function closeChat(){
   chatInput.blur();
 }
 
-function resetChatTimer(){
+function resetTimer(){
   if(chatTimeout) clearTimeout(chatTimeout);
   chatTimeout=setTimeout(()=>{
     if(document.activeElement!==chatInput){
@@ -177,33 +181,28 @@ chatToggle.addEventListener("click",()=>{
 });
 
 chatInput.addEventListener("keydown",e=>{
-  resetChatTimer();
-
+  resetTimer();
   if(e.key==="Enter" && chatInput.value.trim()!==""){
     socket.emit("chatMessage",chatInput.value);
     chatInput.value="";
-    resetChatTimer();
   }
 });
 
 chatInput.addEventListener("blur",()=>{
   isTyping=false;
-  resetChatTimer();
+  resetTimer();
 });
 
-// При получении сообщения чат автоматически открывается
 socket.on("chatMessage",data=>{
   openChat();
-
   const msg=document.createElement("div");
   msg.textContent=data.id.slice(0,4)+": "+data.message;
   chatBox.appendChild(msg);
   chatBox.scrollTop=chatBox.scrollHeight;
-
-  resetChatTimer();
+  resetTimer();
 });
 
-// ================== МУЛЬТИПЛЕЕР ==================
+// ================= МУЛЬТИПЛЕЕР =================
 const otherPlayers={};
 
 function addOtherPlayer(id,data){
@@ -221,12 +220,15 @@ socket.on("currentPlayers",players=>{
     if(id!==socket.id) addOtherPlayer(id,players[id]);
   }
 });
+
 socket.on("newPlayer",data=>addOtherPlayer(data.id,data.player));
+
 socket.on("playerMoved",data=>{
   if(otherPlayers[data.id]){
     otherPlayers[data.id].position.set(data.player.x,data.player.y,data.player.z);
   }
 });
+
 socket.on("playerDisconnected",id=>{
   if(otherPlayers[id]){
     scene.remove(otherPlayers[id]);
@@ -234,7 +236,7 @@ socket.on("playerDisconnected",id=>{
   }
 });
 
-// ================== ФИЗИКА ==================
+// ================= ФИЗИКА =================
 function checkCollision(){
   isOnGround=false;
   for(let p of platforms){
@@ -259,23 +261,28 @@ function animate(){
   const speed=0.15;
 
   if(!isTyping){
-    if(keys["w"]){
+
+    if(keys["KeyW"]){
       player.position.x-=Math.sin(yaw)*speed;
       player.position.z-=Math.cos(yaw)*speed;
     }
-    if(keys["s"]){
+
+    if(keys["KeyS"]){
       player.position.x+=Math.sin(yaw)*speed;
       player.position.z+=Math.cos(yaw)*speed;
     }
-    if(keys["a"]){
+
+    if(keys["KeyA"]){
       player.position.x-=Math.cos(yaw)*speed;
       player.position.z+=Math.sin(yaw)*speed;
     }
-    if(keys["d"]){
+
+    if(keys["KeyD"]){
       player.position.x+=Math.cos(yaw)*speed;
       player.position.z-=Math.sin(yaw)*speed;
     }
-    if(keys[" "] && isOnGround){
+
+    if(keys["Space"] && isOnGround){
       velocityY=jumpPower;
     }
   }
