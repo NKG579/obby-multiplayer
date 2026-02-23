@@ -13,7 +13,7 @@ const players = {};
 io.on("connection", (socket) => {
   console.log("Игрок подключился:", socket.id);
 
-  players[socket.id] = { x: 0, y: 1, z: 0 };
+  players[socket.id] = { x: 0, y: 2, z: 0 };
 
   socket.emit("currentPlayers", players);
 
@@ -30,6 +30,14 @@ io.on("connection", (socket) => {
         player: data
       });
     }
+  });
+
+  // 💬 ЧАТ
+  socket.on("chatMessage", (msg) => {
+    io.emit("chatMessage", {
+      id: socket.id,
+      message: msg
+    });
   });
 
   socket.on("disconnect", () => {
