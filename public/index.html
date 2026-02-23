@@ -3,11 +3,34 @@
 <head>
   <title>OBBY ONLINE</title>
   <style>
-    body { margin:0; overflow:hidden; }
+    body { margin:0; overflow:hidden; font-family:Arial; }
     canvas { display:block; }
+    #chatBox {
+      position: fixed;
+      bottom: 40px;
+      left: 10px;
+      width: 300px;
+      max-height: 200px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 10px;
+      font-size: 14px;
+    }
+    #chatInput {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      width: 300px;
+      padding: 5px;
+      box-sizing: border-box;
+    }
   </style>
 </head>
 <body>
+
+<div id="chatBox"></div>
+<input id="chatInput" placeholder="Написать сообщение...">
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
@@ -23,36 +46,31 @@ const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 const light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(5,10,5);
 scene.add(light);
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
 // ================== ПЛАТФОРМЫ ==================
-
 const platforms = [];
 
 function createPlatform(x,y,z,w,h,d,color=0x808080){
-  const platform = new THREE.Mesh(
+  const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(w,h,d),
     new THREE.MeshStandardMaterial({color})
   );
-  platform.position.set(x,y,z);
-  scene.add(platform);
-  platforms.push(platform);
+  mesh.position.set(x,y,z);
+  scene.add(mesh);
+  platforms.push(mesh);
 }
 
-// Старт
 createPlatform(0,0,0,10,1,10);
-
-// Дорожка obby
 createPlatform(0,3,-10,4,1,4,0xffaa00);
 createPlatform(5,6,-20,4,1,4,0xffaa00);
 createPlatform(-5,9,-30,4,1,4,0xffaa00);
 createPlatform(0,12,-40,4,1,4,0x00ff00);
 
 // ================== ИГРОК ==================
-
 const player = new THREE.Mesh(
   new THREE.BoxGeometry(1,2,1),
   new THREE.MeshStandardMaterial({color:0xff0000})
@@ -65,8 +83,6 @@ let isOnGround = false;
 const gravity = -0.01;
 const jumpPower = 0.25;
 
-// ================== УПРАВЛЕНИЕ ==================
-
 const keys = {};
 document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
@@ -76,23 +92,17 @@ let pitch = 0;
 let isRightMouseDown = false;
 
 document.addEventListener("contextmenu", e => e.preventDefault());
-
-document.addEventListener("mousedown", e => {
-  if(e.button === 2) isRightMouseDown = true;
-});
-document.addEventListener("mouseup", e => {
-  if(e.button === 2) isRightMouseDown = false;
-});
-document.addEventListener("mousemove", e => {
+document.addEventListener("mousedown", e => { if(e.button===2) isRightMouseDown=true; });
+document.addEventListener("mouseup", e => { if(e.button===2) isRightMouseDown=false; });
+document.addEventListener("mousemove", e=>{
   if(isRightMouseDown){
-    yaw -= e.movementX * 0.002;
-    pitch -= e.movementY * 0.002;
+    yaw -= e.movementX*0.002;
+    pitch -= e.movementY*0.002;
     pitch = Math.max(-1.5, Math.min(1.5, pitch));
   }
 });
 
 // ================== МУЛЬТИПЛЕЕР ==================
-
 const otherPlayers = {};
 
 function addOtherPlayer(id,data){
@@ -123,80 +133,83 @@ socket.on("playerDisconnected", id=>{
   }
 });
 
+// ================== ЧАТ ==================
+const chatBox = document.getElementById("chatBox");
+const chatInput = document.getElementById("chatInput");
+
+chatInput.addEventListener("keydown", (e)=>{
+  if(e.key==="Enter" && chatInput.value.trim()!==""){
+    socket.emit("chatMessage", chatInput.value);
+    chatInput.value="";
+  }
+});
+
+socket.on("chatMessage", data=>{
+  const msg=document.createElement("div");
+  msg.textContent=data.id.slice(0,4)+": "+data.message;
+  chatBox.appendChild(msg);
+  chatBox.scrollTop=chatBox.scrollHeight;
+});
+
 // ================== ФИЗИКА ==================
-
 function checkCollision(){
-  isOnGround = false;
-
-  for(let platform of platforms){
-    const px = platform.position.x;
-    const py = platform.position.y + 0.5;
-    const pz = platform.position.z;
-
-    const dx = Math.abs(player.position.x - px);
-    const dz = Math.abs(player.position.z - pz);
-
-    if(dx < platform.geometry.parameters.width/2 &&
-       dz < platform.geometry.parameters.depth/2){
-
-      const top = py + 0.5;
-
-      if(player.position.y - 1 <= top &&
-         player.position.y - 1 >= top - 0.5){
-
-        player.position.y = top + 1;
-        velocityY = 0;
-        isOnGround = true;
+  isOnGround=false;
+  for(let p of platforms){
+    const dx=Math.abs(player.position.x-p.position.x);
+    const dz=Math.abs(player.position.z-p.position.z);
+    if(dx<p.geometry.parameters.width/2 &&
+       dz<p.geometry.parameters.depth/2){
+      const top=p.position.y+0.5;
+      if(player.position.y-1<=top &&
+         player.position.y-1>=top-0.5){
+        player.position.y=top+1;
+        velocityY=0;
+        isOnGround=true;
       }
     }
   }
 }
 
-// ================== АНИМАЦИЯ ==================
-
 function animate(){
   requestAnimationFrame(animate);
 
-  const speed = 0.15;
+  const speed=0.15;
 
   if(keys["w"]){
-    player.position.x -= Math.sin(yaw)*speed;
-    player.position.z -= Math.cos(yaw)*speed;
+    player.position.x-=Math.sin(yaw)*speed;
+    player.position.z-=Math.cos(yaw)*speed;
   }
   if(keys["s"]){
-    player.position.x += Math.sin(yaw)*speed;
-    player.position.z += Math.cos(yaw)*speed;
+    player.position.x+=Math.sin(yaw)*speed;
+    player.position.z+=Math.cos(yaw)*speed;
   }
   if(keys["a"]){
-    player.position.x -= Math.cos(yaw)*speed;
-    player.position.z += Math.sin(yaw)*speed;
+    player.position.x-=Math.cos(yaw)*speed;
+    player.position.z+=Math.sin(yaw)*speed;
   }
   if(keys["d"]){
-    player.position.x += Math.cos(yaw)*speed;
-    player.position.z -= Math.sin(yaw)*speed;
+    player.position.x+=Math.cos(yaw)*speed;
+    player.position.z-=Math.sin(yaw)*speed;
   }
 
-  // Прыжок
   if(keys[" "] && isOnGround){
-    velocityY = jumpPower;
+    velocityY=jumpPower;
   }
 
-  velocityY += gravity;
-  player.position.y += velocityY;
+  velocityY+=gravity;
+  player.position.y+=velocityY;
 
   checkCollision();
 
-  // Смерть при падении
-  if(player.position.y < -20){
+  if(player.position.y<-20){
     player.position.set(0,2,0);
-    velocityY = 0;
+    velocityY=0;
   }
 
-  // Камера
-  const dist = 10;
-  camera.position.x = player.position.x + Math.sin(yaw)*dist*Math.cos(pitch);
-  camera.position.z = player.position.z + Math.cos(yaw)*dist*Math.cos(pitch);
-  camera.position.y = player.position.y + Math.sin(pitch)*dist + 3;
+  const dist=10;
+  camera.position.x=player.position.x+Math.sin(yaw)*dist*Math.cos(pitch);
+  camera.position.z=player.position.z+Math.cos(yaw)*dist*Math.cos(pitch);
+  camera.position.y=player.position.y+Math.sin(pitch)*dist+3;
   camera.lookAt(player.position);
 
   socket.emit("updatePosition",{
@@ -210,6 +223,5 @@ function animate(){
 
 animate();
 </script>
-
 </body>
 </html>
