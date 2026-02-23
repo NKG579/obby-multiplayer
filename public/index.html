@@ -5,9 +5,10 @@
   <style>
     body { margin:0; overflow:hidden; font-family:Arial; }
     canvas { display:block; }
+
     #chatBox {
       position: fixed;
-      bottom: 40px;
+      bottom: 50px;
       left: 10px;
       width: 300px;
       max-height: 200px;
@@ -16,7 +17,9 @@
       color: white;
       padding: 10px;
       font-size: 14px;
+      display: none;
     }
+
     #chatInput {
       position: fixed;
       bottom: 10px;
@@ -24,6 +27,7 @@
       width: 300px;
       padding: 5px;
       box-sizing: border-box;
+      display: none;
     }
   </style>
 </head>
@@ -38,6 +42,7 @@
 <script>
 const socket = io();
 
+// ================== THREE SETUP ==================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 
@@ -84,9 +89,30 @@ const gravity = -0.01;
 const jumpPower = 0.25;
 
 const keys = {};
-document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+let isTyping = false;
 
+document.addEventListener("keydown", e => {
+
+  // Открытие чата по T
+  if(e.key.toLowerCase() === "t" && !isTyping){
+    openChat();
+    return;
+  }
+
+  // Закрытие по ESC
+  if(e.key === "Escape" && isTyping){
+    closeChat();
+    return;
+  }
+
+  keys[e.key.toLowerCase()] = true;
+});
+
+document.addEventListener("keyup", e => {
+  keys[e.key.toLowerCase()] = false;
+});
+
+// ================== КАМЕРА ==================
 let yaw = 0;
 let pitch = 0;
 let isRightMouseDown = false;
@@ -95,7 +121,7 @@ document.addEventListener("contextmenu", e => e.preventDefault());
 document.addEventListener("mousedown", e => { if(e.button===2) isRightMouseDown=true; });
 document.addEventListener("mouseup", e => { if(e.button===2) isRightMouseDown=false; });
 document.addEventListener("mousemove", e=>{
-  if(isRightMouseDown){
+  if(isRightMouseDown && !isTyping){
     yaw -= e.movementX*0.002;
     pitch -= e.movementY*0.002;
     pitch = Math.max(-1.5, Math.min(1.5, pitch));
@@ -137,10 +163,26 @@ socket.on("playerDisconnected", id=>{
 const chatBox = document.getElementById("chatBox");
 const chatInput = document.getElementById("chatInput");
 
+function openChat(){
+  isTyping = true;
+  chatBox.style.display = "block";
+  chatInput.style.display = "block";
+  chatInput.focus();
+}
+
+function closeChat(){
+  isTyping = false;
+  chatInput.value = "";
+  chatInput.blur();
+  chatBox.style.display = "none";
+  chatInput.style.display = "none";
+}
+
 chatInput.addEventListener("keydown", (e)=>{
   if(e.key==="Enter" && chatInput.value.trim()!==""){
     socket.emit("chatMessage", chatInput.value);
     chatInput.value="";
+    closeChat();
   }
 });
 
@@ -175,25 +217,26 @@ function animate(){
 
   const speed=0.15;
 
-  if(keys["w"]){
-    player.position.x-=Math.sin(yaw)*speed;
-    player.position.z-=Math.cos(yaw)*speed;
-  }
-  if(keys["s"]){
-    player.position.x+=Math.sin(yaw)*speed;
-    player.position.z+=Math.cos(yaw)*speed;
-  }
-  if(keys["a"]){
-    player.position.x-=Math.cos(yaw)*speed;
-    player.position.z+=Math.sin(yaw)*speed;
-  }
-  if(keys["d"]){
-    player.position.x+=Math.cos(yaw)*speed;
-    player.position.z-=Math.sin(yaw)*speed;
-  }
-
-  if(keys[" "] && isOnGround){
-    velocityY=jumpPower;
+  if(!isTyping){
+    if(keys["w"]){
+      player.position.x-=Math.sin(yaw)*speed;
+      player.position.z-=Math.cos(yaw)*speed;
+    }
+    if(keys["s"]){
+      player.position.x+=Math.sin(yaw)*speed;
+      player.position.z+=Math.cos(yaw)*speed;
+    }
+    if(keys["a"]){
+      player.position.x-=Math.cos(yaw)*speed;
+      player.position.z+=Math.sin(yaw)*speed;
+    }
+    if(keys["d"]){
+      player.position.x+=Math.cos(yaw)*speed;
+      player.position.z-=Math.sin(yaw)*speed;
+    }
+    if(keys[" "] && isOnGround){
+      velocityY=jumpPower;
+    }
   }
 
   velocityY+=gravity;
