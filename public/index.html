@@ -1,61 +1,77 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>OBBY ONLINE</title>
-  <style>
-    body { margin:0; overflow:hidden; font-family:Arial; }
-    canvas { display:block; }
+<title>OBBY ONLINE</title>
+<style>
+body { margin:0; overflow:hidden; font-family:Arial; }
+canvas { display:block; }
 
-    #chatToggle {
-      position: fixed;
-      bottom: 20px;
-      left: 20px;
-      width: 50px;
-      height: 50px;
-      background: rgba(0,0,0,0.6);
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 22px;
-      cursor: pointer;
-      user-select: none;
-    }
+/* Экран ника */
+#nicknameScreen {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.8);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  flex-direction:column;
+  color:white;
+  z-index:1000;
+}
 
-    #chatContainer {
-      position: fixed;
-      bottom: 80px;
-      left: 20px;
-      width: 300px;
-      background: rgba(0,0,0,0.6);
-      padding: 10px;
-      border-radius: 12px;
-      display: none;
-      color: white;
-    }
+#nicknameScreen input {
+  padding:10px;
+  font-size:18px;
+}
 
-    #chatBox {
-      max-height: 150px;
-      overflow-y: auto;
-      font-size: 14px;
-      margin-bottom: 5px;
-    }
+/* Чат */
+#chatToggle {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 50px;
+  height: 50px;
+  background: rgba(0,0,0,0.6);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+}
 
-    #chatInput {
-      width: 100%;
-      padding: 5px;
-      box-sizing: border-box;
-    }
-  </style>
+#chatContainer {
+  position: fixed;
+  bottom: 80px;
+  left: 20px;
+  width: 300px;
+  background: rgba(0,0,0,0.6);
+  padding: 10px;
+  border-radius: 12px;
+  display: none;
+  color: white;
+}
+
+#chatBox {
+  max-height:150px;
+  overflow-y:auto;
+  margin-bottom:5px;
+}
+</style>
 </head>
 <body>
 
-<div id="chatToggle">💬</div>
+<div id="nicknameScreen">
+  <h2>Введите ник</h2>
+  <input id="nicknameInput" placeholder="Ваш ник">
+  <button onclick="startGame()">Играть</button>
+</div>
 
+<div id="chatToggle">💬</div>
 <div id="chatContainer">
   <div id="chatBox"></div>
-  <input id="chatInput" placeholder="Написать сообщение...">
+  <input id="chatInput" placeholder="Сообщение">
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -63,41 +79,51 @@
 
 <script>
 const socket = io();
+let nickname = "";
 
-// ================= THREE =================
+function startGame(){
+  nickname = document.getElementById("nicknameInput").value.trim();
+  if(!nickname) return;
+  document.getElementById("nicknameScreen").style.display="none";
+  socket.emit("newPlayer",{nickname});
+}
+
+/* ===== THREE ===== */
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
 const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0xffffff,0.6));
-const light = new THREE.DirectionalLight(0xffffff,1);
+const light=new THREE.DirectionalLight(0xffffff,1);
 light.position.set(5,10,5);
 scene.add(light);
 
-// ================= ПЛАТФОРМЫ =================
-const platforms=[];
+/* Платформы */
 
-function createPlatform(x,y,z,w,h,d,color=0x808080){
-  const mesh=new THREE.Mesh(
+const platforms=[];
+function platform(x,y,z,w,h,d,color){
+  const m=new THREE.Mesh(
     new THREE.BoxGeometry(w,h,d),
     new THREE.MeshStandardMaterial({color})
   );
-  mesh.position.set(x,y,z);
-  scene.add(mesh);
-  platforms.push(mesh);
+  m.position.set(x,y,z);
+  scene.add(m);
+  platforms.push(m);
 }
 
-createPlatform(0,0,0,10,1,10);
-createPlatform(0,3,-10,4,1,4,0xffaa00);
-createPlatform(5,6,-20,4,1,4,0xffaa00);
-createPlatform(-5,9,-30,4,1,4,0xffaa00);
-createPlatform(0,12,-40,4,1,4,0x00ff00);
+platform(0,0,0,10,1,10,0x888888);
+platform(0,3,-10,4,1,4,0xffaa00);
+platform(5,6,-20,4,1,4,0xffaa00);
+platform(-5,9,-30,4,1,4,0xffaa00);
+platform(0,12,-40,4,1,4,0x00ff00);
 
-// ================= ИГРОК =================
+/* Игрок */
+
 const player=new THREE.Mesh(
   new THREE.BoxGeometry(1,2,1),
   new THREE.MeshStandardMaterial({color:0xff0000})
@@ -105,140 +131,113 @@ const player=new THREE.Mesh(
 player.position.set(0,2,0);
 scene.add(player);
 
-let velocityY=0;
-let isOnGround=false;
-const gravity=-0.01;
-const jumpPower=0.25;
-
-// ================= УПРАВЛЕНИЕ (НЕЗАВИСИМО ОТ ЯЗЫКА) =================
-const keys={};
-let isTyping=false;
-
-document.addEventListener("keydown",e=>{
-  keys[e.code]=true;
-});
-
-document.addEventListener("keyup",e=>{
-  keys[e.code]=false;
-});
-
-// ================= КАМЕРА =================
-let yaw=0;
-let pitch=0;
-let isRightMouseDown=false;
-
-document.addEventListener("contextmenu",e=>e.preventDefault());
-document.addEventListener("mousedown",e=>{
-  if(e.button===2) isRightMouseDown=true;
-});
-document.addEventListener("mouseup",e=>{
-  if(e.button===2) isRightMouseDown=false;
-});
-document.addEventListener("mousemove",e=>{
-  if(isRightMouseDown && !isTyping){
-    yaw-=e.movementX*0.002;
-    pitch-=e.movementY*0.002;
-    pitch=Math.max(-1.5,Math.min(1.5,pitch));
-  }
-});
-
-// ================= ЧАТ =================
-const chatToggle=document.getElementById("chatToggle");
-const chatContainer=document.getElementById("chatContainer");
-const chatBox=document.getElementById("chatBox");
-const chatInput=document.getElementById("chatInput");
-
-let chatTimeout=null;
-
-function openChat(){
-  chatContainer.style.display="block";
-  isTyping=true;
-  chatInput.focus();
-  resetTimer();
+function createNicknameLabel(text){
+  const canvas=document.createElement("canvas");
+  const ctx=canvas.getContext("2d");
+  canvas.width=256; canvas.height=64;
+  ctx.fillStyle="white";
+  ctx.font="30px Arial";
+  ctx.fillText(text,10,40);
+  const texture=new THREE.CanvasTexture(canvas);
+  const material=new THREE.SpriteMaterial({map:texture});
+  const sprite=new THREE.Sprite(material);
+  sprite.scale.set(4,1,1);
+  return sprite;
 }
 
-function closeChat(){
-  chatContainer.style.display="none";
-  isTyping=false;
-  chatInput.blur();
-}
+const myLabel=createNicknameLabel("You");
+myLabel.position.y=2;
+player.add(myLabel);
 
-function resetTimer(){
-  if(chatTimeout) clearTimeout(chatTimeout);
-  chatTimeout=setTimeout(()=>{
-    if(document.activeElement!==chatInput){
-      closeChat();
+/* Мультиплеер */
+
+const others={};
+
+socket.on("currentPlayers",(players)=>{
+  for(let id in players){
+    if(id!==socket.id){
+      addOther(id,players[id]);
     }
-  },4000);
-}
-
-chatToggle.addEventListener("click",()=>{
-  if(chatContainer.style.display==="block"){
-    closeChat();
-  } else {
-    openChat();
   }
 });
 
-chatInput.addEventListener("keydown",e=>{
-  resetTimer();
-  if(e.key==="Enter" && chatInput.value.trim()!==""){
-    socket.emit("chatMessage",chatInput.value);
-    chatInput.value="";
+socket.on("newPlayer",(data)=>{
+  addOther(data.id,data.player);
+});
+
+socket.on("playerMoved",(data)=>{
+  if(others[data.id]){
+    others[data.id].mesh.position.set(
+      data.player.x,
+      data.player.y,
+      data.player.z
+    );
   }
 });
 
-chatInput.addEventListener("blur",()=>{
-  isTyping=false;
-  resetTimer();
+socket.on("playerDisconnected",(id)=>{
+  if(others[id]){
+    scene.remove(others[id].mesh);
+    delete others[id];
+  }
 });
 
-socket.on("chatMessage",data=>{
-  openChat();
-  const msg=document.createElement("div");
-  msg.textContent=data.id.slice(0,4)+": "+data.message;
-  chatBox.appendChild(msg);
-  chatBox.scrollTop=chatBox.scrollHeight;
-  resetTimer();
-});
-
-// ================= МУЛЬТИПЛЕЕР =================
-const otherPlayers={};
-
-function addOtherPlayer(id,data){
+function addOther(id,data){
   const mesh=new THREE.Mesh(
     new THREE.BoxGeometry(1,2,1),
     new THREE.MeshStandardMaterial({color:0x00ff00})
   );
   mesh.position.set(data.x,data.y,data.z);
+
+  const label=createNicknameLabel(data.nickname);
+  label.position.y=2;
+  mesh.add(label);
+
   scene.add(mesh);
-  otherPlayers[id]=mesh;
+  others[id]={mesh};
 }
 
-socket.on("currentPlayers",players=>{
-  for(let id in players){
-    if(id!==socket.id) addOtherPlayer(id,players[id]);
+/* ЧАТ + ЗВУК */
+
+const chatBox=document.getElementById("chatBox");
+const chatInput=document.getElementById("chatInput");
+const chatContainer=document.getElementById("chatContainer");
+const chatToggle=document.getElementById("chatToggle");
+
+const audio=new Audio("https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg");
+
+chatToggle.onclick=()=>chatContainer.style.display="block";
+
+chatInput.addEventListener("keydown",(e)=>{
+  if(e.key==="Enter" && chatInput.value.trim()){
+    socket.emit("chatMessage",chatInput.value);
+    chatInput.value="";
   }
 });
 
-socket.on("newPlayer",data=>addOtherPlayer(data.id,data.player));
-
-socket.on("playerMoved",data=>{
-  if(otherPlayers[data.id]){
-    otherPlayers[data.id].position.set(data.player.x,data.player.y,data.player.z);
-  }
+socket.on("chatMessage",(data)=>{
+  chatContainer.style.display="block";
+  const div=document.createElement("div");
+  div.textContent=data.nickname+": "+data.message;
+  chatBox.appendChild(div);
+  chatBox.scrollTop=chatBox.scrollHeight;
+  audio.play();
 });
 
-socket.on("playerDisconnected",id=>{
-  if(otherPlayers[id]){
-    scene.remove(otherPlayers[id]);
-    delete otherPlayers[id];
-  }
-});
+/* ФИЗИКА */
 
-// ================= ФИЗИКА =================
+let velocityY=0;
+let onGround=false;
+const gravity=-0.01;
+const jumpPower=0.25;
+
+const keys={};
+
+document.addEventListener("keydown",e=>keys[e.code]=true);
+document.addEventListener("keyup",e=>keys[e.code]=false);
+
 function checkCollision(){
-  isOnGround=false;
+  onGround=false;
   for(let p of platforms){
     const dx=Math.abs(player.position.x-p.position.x);
     const dz=Math.abs(player.position.z-p.position.z);
@@ -249,7 +248,7 @@ function checkCollision(){
          player.position.y-1>=top-0.5){
         player.position.y=top+1;
         velocityY=0;
-        isOnGround=true;
+        onGround=true;
       }
     }
   }
@@ -260,32 +259,12 @@ function animate(){
 
   const speed=0.15;
 
-  if(!isTyping){
+  if(keys["KeyW"]) player.position.z-=speed;
+  if(keys["KeyS"]) player.position.z+=speed;
+  if(keys["KeyA"]) player.position.x-=speed;
+  if(keys["KeyD"]) player.position.x+=speed;
 
-    if(keys["KeyW"]){
-      player.position.x-=Math.sin(yaw)*speed;
-      player.position.z-=Math.cos(yaw)*speed;
-    }
-
-    if(keys["KeyS"]){
-      player.position.x+=Math.sin(yaw)*speed;
-      player.position.z+=Math.cos(yaw)*speed;
-    }
-
-    if(keys["KeyA"]){
-      player.position.x-=Math.cos(yaw)*speed;
-      player.position.z+=Math.sin(yaw)*speed;
-    }
-
-    if(keys["KeyD"]){
-      player.position.x+=Math.cos(yaw)*speed;
-      player.position.z-=Math.sin(yaw)*speed;
-    }
-
-    if(keys["Space"] && isOnGround){
-      velocityY=jumpPower;
-    }
-  }
+  if(keys["Space"] && onGround) velocityY=jumpPower;
 
   velocityY+=gravity;
   player.position.y+=velocityY;
@@ -297,10 +276,11 @@ function animate(){
     velocityY=0;
   }
 
-  const dist=10;
-  camera.position.x=player.position.x+Math.sin(yaw)*dist*Math.cos(pitch);
-  camera.position.z=player.position.z+Math.cos(yaw)*dist*Math.cos(pitch);
-  camera.position.y=player.position.y+Math.sin(pitch)*dist+3;
+  camera.position.set(
+    player.position.x,
+    player.position.y+6,
+    player.position.z+10
+  );
   camera.lookAt(player.position);
 
   socket.emit("updatePosition",{
